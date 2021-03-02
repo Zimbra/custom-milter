@@ -1,21 +1,21 @@
 # How to add a custom Milter to Zimbra.
 
-This article describes how you can create an extension to Postfix. By implementing Milter (an email extension protocol) you can create an extension that receives events whenever an email is send or received. Your custom Milter extension can have event handlers for SMTP events (CONNECT, DISCONNECT), SMTP commands (HELO, MAIL FROM, etc.) as well as mail content (headers and body). 
+This article describes how you can create an extension to Postfix. By implementing a Milter (an email extension protocol) you can create an extension that receives events whenever an email is sent or received. Your custom Milter extension can have event handlers for SMTP events (CONNECT, DISCONNECT), SMTP commands (HELO, MAIL FROM, etc.) as well as mail content (headers and body). 
 
-Milter allows you to add or replace (custom) email headers, filter out specific content for implementing privacy policies. Automatically add BCC recipients for archiving, add disclaimers, etc. All this can be done conditionally for specific senders and/or specific recipients. You can also use Milter to enhance the functionality of Zimbra Distribution lists.
+Milters allow you to add or replace (custom) email headers, filter out specific content for implementing privacy policies, automatically add BCC recipients for archiving, add disclaimers etc. All this can be done conditionally for specific senders and/or recipients. You can also use a Milter to enhance the functionality of Zimbra Distribution lists.
 
-Milter is also used in other Zimbra components such as DKIM and SpamAssasin. This is not a problem as you can have multiple Milters on Zimbra Postfix.
+Milters are also used in other Zimbra components such as DKIM and SpamAssasin. This is not a problem as you can have multiple Milters on Zimbra Postfix.
 
 ## Python 3 Milter demo
 
-While there are Java, C and NodeJS implementations of Milter, the one used in this article is based on Python 3. Advantages of using Python in this scenario is that it avoids the need of compiling (C/Java) which makes it easier to debug. In addition you can use LDAP and MariaDB in Python if you need to.
+While there are Java, C and NodeJS implementations of Milters, the one used in this article is based on Python 3. The advantage of using Python in this scenario is that it avoids the need to compile (C/Java), which makes it easier to debug. In addition you can use LDAP and MariaDB in Python if you need to.
 
-Milter can be installed on your Zimbra server or on a dedicated server. Installation steps for Ubuntu 20.04: 
+Milters can be installed on your Zimbra server or on a dedicated server. Installation steps for Ubuntu 20.04: 
 
      apt install python3-milter supervisor
      mkdir /etc/milter
 
-This demo script checks if a user from our Zimbra server `example.com` sends an email to `specialcompany.com`, the Milter script will replace the `From` email header with that of the legal department, it will also add the legal department as a BCC recipient. This happens without user interaction. And since Milter is fully on the server side, it will always do it's work. It does not matter if the user uses webmail, a mobile device or a desktop client.
+This demo script checks if a user from our Zimbra server `example.com` sends an email to `specialcompany.com`, the Milter script will replace the `From` email header with that of the legal department, it will also add the legal department as a BCC recipient. This happens without user interaction. And since the Milter is fully server side, it will always be triggered. It does not matter if the user uses webmail, a mobile device or a desktop client.
 
 Add the demo Milter script by using `nano` to `/etc/milter/custom-milter.py`. Read the in-code comments to understand how it works:
      
@@ -223,13 +223,13 @@ if __name__ == "__main__":
   main()
 ```
 
-A new instance of our Python Milter is created every time an email is passed to Postfix. So you can use class variables to keep track of things while events are triggered. The events this Python script uses are `header, envrcpt, eom`, the others are shown for reference and do some logging. Some events such as `eom` end-of-message are triggered once. Others such as `header, envrcpt` are triggered for each one of the mail headers/recipients. The order in which the events trigger are similar to how an email is send over SMTP. So CONNECT... RCPT TO... headers, body etc.
+A new instance of our Python Milter is created every time an email is passed to Postfix. So you can use class variables to keep track of things while events are triggered. The events this Python script uses are `header, envrcpt, eom`, the others are shown for reference and do some logging. Some events such as `eom` end-of-message are triggered once. Others such as `header, envrcpt` are triggered for each one of the mail headers/recipients. The order in which the events trigger are similar to how an email is sent over SMTP. So CONNECT... RCPT TO... headers, body etc.
 
 Please note that the email From header can only be obtained via the `header` event. The `envfrom` event can be used to get the From that is used in the SMTP session. These may or may not be the same so pay attention to it.
 
 In most cases you will have to gather all the variables you need and set them on the class instance as the events fire. Then implement your custom functionality in the `eom` (end of message) event.
 
-Example, the `envrcpt` event is called for all the recipients of the email, in case we see a `specialcompany.com` recipient, we set `self.mustRewriteFrom = 'true'` so we know there was a `specialcompany.com` recipient when we receive the `eom` event. `eom` is one of the last events to be triggered.
+Example, the `envrcpt` event is called for all the recipients of the email, when we see a `specialcompany.com` recipient, we set `self.mustRewriteFrom = 'true'` so we know there was a `specialcompany.com` recipient when we receive the `eom` event. `eom` is one of the last events to be triggered.
 
 ```python
   def envrcpt(self, to, *str):
@@ -237,7 +237,7 @@ Example, the `envrcpt` event is called for all the recipients of the email, in c
        self.mustRewriteFrom = 'true'
 ```
 
-All event handlers need to return one of `Milter.CONTINUE, Milter.ACCEPT or Milter.REJECT`. Continue means continue processing this email in the next event. Accept means our Milter is all done, and Postfix or a next Milter can start processing it. Reject tells Postfix to reject this message, the user will see a prompt or get a message that sending failed.
+All event handlers need to return one of `Milter.CONTINUE, Milter.ACCEPT or Milter.REJECT`. Continue means continue processing this email in the next event. Accept means our Milter is all done, and Postfix or a next Milter can start processing it. Reject tells Postfix to reject this message, the user will see a prompt or get a message saying sending failed.
 
 Set up supervisord to load our Python script:
 
@@ -263,7 +263,7 @@ Then check if the milter service is running:
 
 If you made any typos, you will see them in the log, and there will be nothing listening on port 8800. Try again and issue `systemctl stop supervisord && systemctl start supervisord` or `systemctl stop supervisor && systemctl start supervisor`. 
 
-**It is advised to install a host firewall, so you can reject incoming connections to Milter that are not coming from your Zimbra cluster. On a single server you can use `socketname = "inet:127.0.0.1:8800"` in the Python script.**
+**It is advised to install a host firewall, so you can reject incoming connections to Milters that are not coming from your Zimbra cluster. On a single server you can use `socketname = "inet:127.0.0.1:8800"` in the Python script.**
 
 If it works, enable it for Zimbra:
 
