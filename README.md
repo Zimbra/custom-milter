@@ -39,6 +39,9 @@ except:
   from io import BytesIO
 import time
 import email
+from email import message_from_binary_file
+from email import policy
+import mimetypes
 import os
 import sys
 from socket import AF_INET, AF_INET6
@@ -145,15 +148,24 @@ class myMilter(Milter.Base):
     return Milter.CONTINUE
 
   def eom(self):
-    #self.fp.seek(0)
+    self.fp.seek(0)
     #msg holds the entire message
-    #msg = email.message_from_binary_file(self.fp)
-    #self.log("msg:", msg);
+    msg = email.message_from_binary_file(self.fp, policy=policy.default)
+    self.log("msg:", msg);
+
+    #example on how to iterate through attachments
+    for attachment in msg.iter_attachments():
+      #attachment holds the attachment object so that it can be used with a new MIMEMultipart() message
+      self.log("Attachment filename is %s" % (attachment.get_filename(),))
+      self.log("Attachment content/type is %s" % (attachment.get_content_type(),))
+      data = attachment.get_content()
+      self.log("Attachment content is %s" % (data,))
+
     # many milter functions can only be called from eom()    
     self.log("eom reached", self.fromHeader)
     if 'example.com' in self.fromHeader:
        self.comingFromMe = 'true'
-    
+
     if 'true' in self.comingFromMe:
        if 'true' in self.mustRewriteFrom:
           self.log("rewriting from")
